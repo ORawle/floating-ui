@@ -27,17 +27,19 @@ function findNonDisabledIndex(
     startingIndex = -1,
     decrement = false,
     disabledIndices,
+    amount = 1,
   }: {
     startingIndex?: number;
     decrement?: boolean;
     disabledIndices?: Array<number>;
+    amount?: number;
   } = {}
 ): number {
   const list = listRef.current;
 
   let index = startingIndex;
   do {
-    index = index + (decrement ? -1 : 1);
+    index = index + (decrement ? -amount : amount);
   } while (
     index >= 0 &&
     index <= list.length - 1 &&
@@ -141,6 +143,7 @@ export interface Props {
   rtl?: boolean;
   virtual?: boolean;
   orientation?: 'vertical' | 'horizontal' | 'both';
+  cols?: number;
 }
 
 /**
@@ -166,6 +169,7 @@ export const useListNavigation = <RT extends ReferenceType = ReferenceType>(
     openOnArrowKeyDown = true,
     disabledIndices = openOnArrowKeyDown ? undefined : [],
     orientation = 'vertical',
+    cols = 1,
   }: Props = {
     listRef: {current: []},
     activeIndex: null,
@@ -188,6 +192,15 @@ export const useListNavigation = <RT extends ReferenceType = ReferenceType>(
           [
             'Floating UI: `useListNavigation` must be virtual to allow',
             'escaping.',
+          ].join(' ')
+        );
+      }
+
+      if (cols > 1 && orientation !== 'horizontal') {
+        console.warn(
+          [
+            'Floating UI: `orientation` must be "horizontal" when in grid',
+            'navigation mode (`cols` > 1)',
           ].join(' ')
         );
       }
@@ -371,6 +384,125 @@ export const useListNavigation = <RT extends ReferenceType = ReferenceType>(
     if (event.key === 'End') {
       indexRef.current = maxIndex;
       onNavigate(indexRef.current);
+    }
+
+    // Grid navigation
+    if (cols > 1) {
+      const prevIndex = indexRef.current;
+
+      if (event.key === ARROW_UP) {
+        stopEvent(event);
+
+        if (prevIndex === -1) {
+          indexRef.current = maxIndex;
+        } else {
+          indexRef.current = findNonDisabledIndex(listRef, {
+            startingIndex: prevIndex,
+            amount: cols,
+            decrement: true,
+            disabledIndices,
+          });
+
+          if (
+            (loop && prevIndex - cols < minIndex) ||
+            indexRef.current === -1
+          ) {
+            const col = prevIndex % cols;
+            const maxCol = maxIndex % cols;
+            const offset = maxIndex - (maxCol - col);
+
+            if (maxCol === col) {
+              indexRef.current = maxIndex;
+            } else {
+              indexRef.current = maxCol > col ? offset : offset - cols;
+            }
+          }
+        }
+
+        if (isIndexOutOfBounds(listRef, indexRef.current)) {
+          indexRef.current = prevIndex;
+        }
+
+        onNavigate(indexRef.current);
+      }
+
+      if (event.key === ARROW_DOWN) {
+        stopEvent(event);
+
+        if (prevIndex === -1) {
+          indexRef.current = minIndex;
+        } else {
+          indexRef.current = findNonDisabledIndex(listRef, {
+            startingIndex: prevIndex,
+            amount: cols,
+            disabledIndices,
+          });
+
+          if (loop && prevIndex + cols > maxIndex) {
+            indexRef.current = findNonDisabledIndex(listRef, {
+              startingIndex: (prevIndex % cols) - cols,
+              amount: cols,
+              disabledIndices,
+            });
+          }
+        }
+
+        if (isIndexOutOfBounds(listRef, indexRef.current)) {
+          indexRef.current = prevIndex;
+        }
+
+        onNavigate(indexRef.current);
+      }
+
+      // Remains on the same row/column
+      if (orientation === 'both') {
+        const prevRow = Math.floor(prevIndex / cols);
+
+        if (event.key === ARROW_RIGHT) {
+          if (prevIndex % cols !== cols - 1) {
+            indexRef.current = findNonDisabledIndex(listRef, {
+              startingIndex: prevIndex,
+              disabledIndices,
+            });
+          } else if (loop) {
+            indexRef.current = findNonDisabledIndex(listRef, {
+              startingIndex: prevIndex,
+              decrement: true,
+              amount: cols - 1,
+              disabledIndices,
+            });
+          }
+
+          // different row
+          if (Math.floor(indexRef.current / cols) !== prevRow) {
+            indexRef.current = prevIndex;
+          }
+        }
+
+        if (event.key === ARROW_LEFT) {
+          if (prevIndex % cols !== 0) {
+            indexRef.current = findNonDisabledIndex(listRef, {
+              startingIndex: prevIndex,
+              disabledIndices,
+              decrement: true,
+            });
+          } else if (loop) {
+            indexRef.current = findNonDisabledIndex(listRef, {
+              startingIndex: prevIndex,
+              disabledIndices,
+              amount: cols - 1,
+            });
+          }
+
+          // different row
+          if (Math.floor(indexRef.current / cols) !== prevRow) {
+            indexRef.current = prevIndex;
+          }
+        }
+
+        onNavigate(indexRef.current);
+        return;
+      }
     }
 
     if (isMainOrientationKey(event.key, orientation)) {
