@@ -195,15 +195,6 @@ export const useListNavigation = <RT extends ReferenceType = ReferenceType>(
           ].join(' ')
         );
       }
-
-      if (cols > 1 && orientation !== 'horizontal') {
-        console.warn(
-          [
-            'Floating UI: `orientation` must be "horizontal" when in grid',
-            'navigation mode (`cols` > 1)',
-          ].join(' ')
-        );
-      }
     }
   }
 
